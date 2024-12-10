@@ -5,6 +5,8 @@ from typing import Literal
 from typing import Optional
 from typing import Any
 import os
+from langchain_core.language_models.llms import BaseLLM
+from langchain_openai import OpenAI
 
 from . import rails
 from . import store
@@ -20,10 +22,8 @@ class Langsecure(BaseModel):
     tracking_server: Optional[Union[Path, HttpUrl]] = Path("~/.langsecure/trace.log").expanduser()
     rails_backend: Optional[Literal['nvidia-nemoguardrails']] = 'nvidia-nemoguardrails'
     langsecure_server: Optional[HttpUrl] = None
-    llm_engine: Optional[str] = "openai"
-    llm_model: Optional[str] = "gpt-3.5-turbo-instruct"
 
-    def __init__(self, **params):
+    def __init__(self, llm=None, **params):
         super().__init__(**params)
         os.makedirs(os.path.expanduser("~/.langsecure"), exist_ok=True)
 
@@ -37,6 +37,10 @@ class Langsecure(BaseModel):
             # Load the policies into the pydantic class.
             self._py_policystore = store.PyPolicyStore(self.policy_store)
         self._trace = trace.LangsecureTracer(self.tracking_server).trace(name="langsecure")
+        if llm is None:
+            self._llm = OpenAI(model_name="gpt-3.5-turbo-instruct")
+        else:
+            self._llm = llm
 
 
     def shield(self, runnable: Any):
@@ -69,7 +73,7 @@ class Langsecure(BaseModel):
                 if fn != None:
                     parallel_rails.append(fn)
                     #raise ValueError(f"No implementor found for filter {filter.id}")
-        results = rails.ParallelRails().trigger(rails=parallel_rails, rules=filter.rules, prompt=prompt, engine=self.llm_engine, trace=self._trace, model=self.llm_model)
+        results = rails.ParallelRails().trigger(rails=parallel_rails, rules=filter.rules, prompt=prompt, llm=self._llm, trace=self._trace)
 
         for result in results:
             if result.decision == 'deny':

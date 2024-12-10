@@ -134,12 +134,10 @@ from langsecure.types import Result
 from langsecure.factory import implements
 
 @implements('general_orgcompliance')
-def secure_input_general(prompt, rules=None, engine="openai", model="gpt-3.5-turbo-instruct") -> Result:
+def secure_input_general(prompt, llm, rules=None) -> Result:
     self_check_input_prompt = TaskPrompt(task=Task.SELF_CHECK_INPUT, content=SELF_CHECK_INPUT_PROMPT_STR)
-    model = Model(type="main", engine=engine, model=model)
+    model = Model(type="main", engine="openai", model="gpt-3.5-turbo-instruct")
     rails_config = RailsConfig(models=[model], prompts=[self_check_input_prompt])
-    rails = LLMRails(rails_config)
-    llm = rails.llm
     llm_task_manager = LLMTaskManager(rails_config)
 
     # Check input for any jail break attempts
@@ -167,13 +165,12 @@ async def input_check_blocked_terms(context: Optional[dict] = None):
     return False
 
 @implements('proprietary_terms')
-def secure_input_proprietary_terms(prompt, rules=None, engine="openai", model="gpt-3.5-turbo-instruct") -> Result:
+def secure_input_proprietary_terms(prompt, llm, rules=None) -> Result:
     rails_config = RailsConfig.from_content(colang_content=PROPRIETARY_TERMS_CO)
-    model = Model(type="main", engine=engine, model=model)
+    model = Model(type="main", engine="openai", model="gpt-3.5-turbo-instruct")
     rails_config.models = [model]
     rails_config.rails = Rails(input=InputRails(flows=["input check blocked terms"]))
-
-    rails = LLMRails(rails_config)
+    rails = LLMRails(rails_config, llm=llm)
     rails.register_action(input_check_blocked_terms, name='input_check_blocked_terms')
     output = rails.generate(prompt, return_context=True)
 
@@ -183,12 +180,12 @@ def secure_input_proprietary_terms(prompt, rules=None, engine="openai", model="g
     return Result(decision='allow', message='proprietary terms check passed', policy_id='check_proprietary_terms')
 
 @implements('topics_control')
-def secure_input_disallowed_topics(prompt, rules=None, engine="openai", model="gpt-3.5-turbo-instruct") -> Result:
+def secure_input_disallowed_topics(prompt, llm, rules=None) -> Result:
     rails_config = RailsConfig.from_content(colang_content=DISALLOWED_TOPICS_CO)
-    model = Model(type="main", engine=engine, model=model)
+    model = Model(type="main", engine="openai", model="gpt-3.5-turbo-instruct")
     rails_config.models = [model]
 
-    rails = LLMRails(rails_config)
+    rails = LLMRails(rails_config, llm=llm)
     output = rails.generate(prompt, return_context=True)
     #[MAK - TODO] There should be a better way to figure out the response
     if "I can't respond to that.".lower() in output[0]['content']:
@@ -197,15 +194,16 @@ def secure_input_disallowed_topics(prompt, rules=None, engine="openai", model="g
     return Result(decision='allow', message='disallowed topics check passed.', policy_id='check_disallowed_topics')
 
 @implements('content_security')
-def secure_input_content_security(prompt, rules=None, engine="openai", model="gpt-3.5-turbo-instruct") -> Result:
-    model1 = Model(type="main", engine=engine, model=model)
-    model2 = Model(type="openai", engine=engine, model=model)
+def secure_input_content_security(prompt, llm, rules=None) -> Result:
+    model1 = Model(type="main", engine="openai", model="gpt-3.5-turbo-instruct")
+    model2 = Model(type="openai", engine="openai", model="gpt-3.5-turbo-instruct")
     input_content_security_prompt = TaskPrompt(task='content_safety_check_input $model=openai', content=INPUT_CONTENT_SECURITY_PROMPT, output_parser="is_content_safe")
     rails_config = RailsConfig(models=[model1, model2], prompts=[input_content_security_prompt])
-   
+    
     rails_config.rails = Rails(input=InputRails(flows=['content safety check input $model="openai"']))
 
-    rails = LLMRails(rails_config)
+    rails = LLMRails(rails_config, llm=llm)
+    rails.register_action_param("llms",{"main": llm, "openai":llm})
     output = rails.generate(prompt, return_context=True)
 
     if False == output[1]['allowed']:
@@ -214,7 +212,7 @@ def secure_input_content_security(prompt, rules=None, engine="openai", model="gp
     return Result(decision='allow', message="content security check passed.", policy_id='check_content_security')
 
 
-def secure_output_content_securitu(query, answer, relevant_context=None):
+def secure_output_content_security(query, answer, relevant_context=None):
     return
 
 

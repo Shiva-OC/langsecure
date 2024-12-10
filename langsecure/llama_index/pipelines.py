@@ -1,6 +1,7 @@
 """Arg pack components."""
 
 from typing import Any, Callable, Dict, Optional
+import traceback
 
 from llama_index.core.base.query_pipeline.query import (
     InputKeys,
@@ -84,7 +85,7 @@ class LI_QueryPipeline(Langsecure):
             if stage == "input":
                 for module_key, module_input in run_state.all_module_inputs.items():
                     if module_key == stage:
-                        deny, deny_message = self._input_enforcer(module_input['input'])
+                        deny, deny_message = self._input_enforcer(module_input['question'])
                         if deny == True:
                             stop_component = StopComponent(message=deny_message)
                             #Execute a stop stage and return back to the caller
