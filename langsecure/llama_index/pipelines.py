@@ -61,26 +61,28 @@ class StopComponent(QueryComponent):
 import inspect
 from langsecure.factory import implements
 from langsecure import Langsecure
+from llama_index.core.query_pipeline import QueryPipeline
 
+orig_get_next_module_keys = QueryPipeline.get_next_module_keys
 @implements('llama_index.core.query_pipeline.query.QueryPipeline')
 class LI_QueryPipeline(Langsecure):
     def shield(self, runnable: Any) -> Any:
+        if runnable.dag.has_node("stop_component"):
+            runnable.dag.remove_node("stop_component")
+
         self._parent = runnable
         self._parent_callables = {name: func for name, func in inspect.getmembers(runnable, predicate=inspect.ismethod)}
-
-
         self._parent.__class__.get_next_module_keys = self._get_next_module_keys
         return self._parent
 
 
     def _get_next_module_keys(self, run_state):
-        parent_callable = self._parent_callables["get_next_module_keys"]
-
+        
         if 'stop_component' in run_state.executed_modules:
             #stop the pipeline execution here
             return []
 
-        next_stages = parent_callable(run_state)
+        next_stages = orig_get_next_module_keys(self._parent, run_state)
         for stage in next_stages:
             if stage == "input":
                 for module_key, module_input in run_state.all_module_inputs.items():
@@ -90,7 +92,7 @@ class LI_QueryPipeline(Langsecure):
                             stop_component = StopComponent(message=deny_message)
                             #Execute a stop stage and return back to the caller
                             run_state.all_module_inputs['stop_component'] = {"message": deny_message}
-                            if "stop_component" not in run_state.module_dict.keys():
+                            if "stop_component" not in self._parent.module_dict:
                                 self._parent.add("stop_component", stop_component)
                             return ["stop_component"]
             if stage == "stop_component":
