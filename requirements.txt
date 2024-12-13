@@ -3,3 +3,7 @@ taskflow==5.9.1
 flask
 opentelemetry-sdk
 langfuse
+
+langchain-core>=0.2.14,<0.3.0
+langchain-openai>=0.0.8,<0.3.0
+tenacity<9.0.0  # For compatibility with other packages
