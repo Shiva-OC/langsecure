@@ -101,26 +101,61 @@ class LI_QueryPipeline(Langsecure):
         self._parent.__class__.get_next_module_keys = self._get_next_module_keys
         return self._parent
 
-    def _get_next_module_keys(self, run_state):
-        if 'stop_component' in run_state.executed_modules:
-            # stop the pipeline execution here
-            return []
+    # def _get_next_module_keys(self, run_state):
+    #     if 'stop_component' in run_state.executed_modules:
+    #         # stop the pipeline execution here
+    #         return []
 
-        next_stages = orig_get_next_module_keys(self._parent, run_state)
-        for stage in next_stages:
-            if stage == "input":
-                for module_key, module_input in run_state.all_module_inputs.items():
-                    if module_key == stage:
-                        deny, deny_message = self._input_enforcer(module_input['question'])
-                        if deny:
-                            stop_component = StopComponent(message=deny_message)
-                            run_state.all_module_inputs['stop_component'] = {"message": deny_message}
-                            if "stop_component" not in self._parent.module_dict:
-                                self._parent.add("stop_component", stop_component)
-                                # Set the callback manager on the newly added stop_component
-                                stop_component.set_callback_manager(self._parent.callback_manager)
-                            return ["stop_component"]
-            if stage == "stop_component":
-                # post stop component, just return empty list
-                return []
-        return next_stages
+    #     next_stages = orig_get_next_module_keys(self._parent, run_state)
+    #     for stage in next_stages:
+    #         if stage == "input":
+    #             for module_key, module_input in run_state.all_module_inputs.items():
+    #                 if module_key == stage:
+    #                     deny, deny_message = self._input_enforcer(module_input['question'])
+    #                     if deny:
+    #                         stop_component = StopComponent(message=deny_message)
+    #                         run_state.all_module_inputs['stop_component'] = {"message": deny_message}
+    #                         if "stop_component" not in self._parent.module_dict:
+    #                             self._parent.add("stop_component", stop_component)
+    #                             # Set the callback manager on the newly added stop_component
+    #                             stop_component.set_callback_manager(self._parent.callback_manager)
+    #                         return ["stop_component"]
+    #         if stage == "stop_component":
+    #             # post stop component, just return empty list
+    #             return []
+    #     return next_stages
+
+
+def _get_next_module_keys(self, run_state):
+    if 'stop_component' in run_state.executed_modules:
+        return []
+
+    next_stages = orig_get_next_module_keys(self._parent, run_state)
+    for stage in next_stages:
+        if stage == "input":
+            for module_key, module_input in run_state.all_module_inputs.items():
+                if module_key == stage:
+                    deny, deny_message = self._input_enforcer(module_input.get('question'))
+                    if deny:
+                        stop_component = StopComponent(message=deny_message)
+                        run_state.all_module_inputs['stop_component'] = {"message": deny_message}
+                        if "stop_component" not in self._parent.module_dict:
+                            self._parent.add("stop_component", stop_component)
+                        return ["stop_component"]
+
+        if stage in ["retriever", "summarizer"]:  # Context and output stage checks
+            for module_key, module_output in run_state.all_module_outputs.items():
+                if module_key == stage:
+                    deny, deny_message = self._output_enforcer(
+                        prompt=module_output.get('input', ""), 
+                        answer=module_output.get('output', ""), 
+                        context=module_output.get('context', {})
+                    )
+                    if deny:
+                        stop_component = StopComponent(message=deny_message)
+                        run_state.all_module_inputs['stop_component'] = {"message": deny_message}
+                        if "stop_component" not in self._parent.module_dict:
+                            self._parent.add("stop_component", stop_component)
+                        return ["stop_component"]
+    return next_stages
+

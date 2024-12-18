@@ -212,12 +212,41 @@ def secure_input_content_security(prompt, llm, rules=None) -> Result:
     return Result(decision='allow', message="content security check passed.", policy_id='check_content_security')
 
 
-def secure_output_content_security(query, answer, relevant_context=None):
-    return
+@implements('output_content_security')
+def secure_output_content_security(query, context, relevant_context=None) -> Result:
+    # Example: Check if the output (answer) contains unsafe content
+    model = Model(type="main", engine="openai", model="gpt-3.5-turbo-instruct")
+    content_security_prompt = TaskPrompt(
+        task='output_safety_check', 
+        content=f"Check the safety of the output: '{answer}' with context: {relevant_context}"
+    )
+    rails_config = RailsConfig(models=[model], prompts=[content_security_prompt])
+    rails = LLMRails(rails_config, llm=llm_call)
+    output = rails.generate(prompt=answer, return_context=True)
+
+    if "unsafe" in output[0]['content'].lower():
+        return Result(decision='deny', message=output[0]['content'], policy_id='check_output_content_security')
+    
+    return Result(decision='allow', message='Output content passed checks.', policy_id='check_output_content_security')
 
 
-def secure_output_hallucination(query, answer, relevant_context=None):
-    return
+@implements('output_hallucination')
+def secure_output_hallucination(query, answer, relevant_context=None) -> Result:
+    # Example: Check for hallucination in the output
+    model = Model(type="main", engine="openai", model="gpt-3.5-turbo-instruct")
+    hallucination_prompt = TaskPrompt(
+        task='hallucination_check', 
+        content=f"Check if the response: '{answer}' aligns with the context: {relevant_context}"
+    )
+    rails_config = RailsConfig(models=[model], prompts=[hallucination_prompt])
+    rails = LLMRails(rails_config, llm=llm_call)
+    output = rails.generate(prompt=answer, return_context=True)
+
+    if "hallucination detected" in output[0]['content'].lower():
+        return Result(decision='deny', message=output[0]['content'], policy_id='check_output_hallucination')
+    
+    return Result(decision='allow', message='No hallucination detected.', policy_id='check_output_hallucination')
+
 
 from taskflow import engines
 from taskflow import task

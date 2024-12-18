@@ -16,6 +16,8 @@ filters:
     - hallucination_moderation
     - context_security
     - compliance_check
+    - output_content_security
+    - output_hallucination
 logging:
   level: info
   target: default #file://, mlflow://, langfuse://
@@ -87,4 +89,16 @@ policies:
         - gdpr
         - ccpa
         action: log
+      - id: rag_pipeline_moderation
+        filters:
+        - id: output_content_security
+          action: deny
+          scope:
+          - bot_response
+          - context
+        - id: output_hallucination
+          action: log
+          scope:
+          - bot_response
+          - context
 

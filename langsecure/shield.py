@@ -43,17 +43,31 @@ class Langsecure(BaseModel):
             self._llm = llm
 
 
-    def shield(self, runnable: Any):
-        try:
-            fqcn = f"{runnable.__class__.__module__}.{runnable.__class__.__qualname__}"
-            implementor = factory.get(fqcn)
-            if implementor != None:
-                return implementor(**self.__dict__).shield(runnable)
-            else:
-                return runnable
-        except Exception as e:
-            print(f"An error of type {type(e).__name__} occurred: {e}")
-            raise e
+def shield(self, runnable: Any):
+    try:
+        fqcn = f"{runnable.__class__.__module__}.{runnable.__class__.__qualname__}"
+        implementor = factory.get(fqcn)
+        if implementor:
+            return implementor(**self.__dict__).shield(runnable)
+        else:
+            # Ensure both input and output policies are enforced
+            def wrapped_run(*args, **kwargs):
+                output = runnable.run(*args, **kwargs)
+                deny, deny_message = self._output_enforcer(
+                    prompt=kwargs.get('input', ""), 
+                    answer=output.get('output', ""), 
+                    context=output.get('context', {})
+                )
+                if deny:
+                    raise ValueError(f"Output policy violation: {deny_message}")
+                return output
+
+            runnable.run = wrapped_run
+            return runnable
+    except Exception as e:
+        print(f"An error of type {type(e).__name__} occurred: {e}")
+        raise e
+
 
     def _input_enforcer(self, prompt) -> (bool, str):
         return self._enforcer(scope=['user_input'], prompt=prompt)
