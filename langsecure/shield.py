@@ -7,6 +7,7 @@ from typing import Any
 import os
 from langchain_core.language_models.llms import BaseLLM
 from langchain_openai import OpenAI
+from functools import partial
 
 from . import rails
 from . import store
@@ -71,9 +72,9 @@ class Langsecure(BaseModel):
                 fn = factory.get(filter.id)
                 #log if there is no implementor found for a filter
                 if fn != None:
-                    parallel_rails.append(fn)
+                    parallel_rails.append(partial(fn, rules=filter.rules))
                     #raise ValueError(f"No implementor found for filter {filter.id}")
-        results = rails.ParallelRails().trigger(rails=parallel_rails, rules=filter.rules, prompt=prompt, llm=self._llm, trace=self._trace)
+        results = rails.ParallelRails().trigger(rails=parallel_rails, prompt=prompt, llm=self._llm, trace=self._trace)
 
         for result in results:
             if result.decision == 'deny':

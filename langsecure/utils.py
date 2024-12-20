@@ -18,7 +18,7 @@ def execute_remotely_if_needed(func):
                 raise Exception(f"Remote invocation failed with status: {response.status_code}")
         else:
             # Local execution
-            print(f"Executing {func.__name__} locally with args: {args}, kwargs: {kwargs}")
+            #print(f"Executing {func.__name__} locally with args: {args}, kwargs: {kwargs}")
             return func(instance, *args, **kwargs)
 
     return wrapper
