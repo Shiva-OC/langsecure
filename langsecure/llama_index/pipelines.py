@@ -103,24 +103,68 @@ class LI_QueryPipeline(Langsecure):
 
     def _get_next_module_keys(self, run_state):
         if 'stop_component' in run_state.executed_modules:
-            # stop the pipeline execution here
             return []
 
         next_stages = orig_get_next_module_keys(self._parent, run_state)
+
         for stage in next_stages:
             if stage == "input":
                 for module_key, module_input in run_state.all_module_inputs.items():
                     if module_key == stage:
-                        deny, deny_message = self._input_enforcer(module_input['question'])
+                        deny, deny_message = self._enforcer(scope=['user_input'], prompt=module_input['input'])
                         if deny:
                             stop_component = StopComponent(message=deny_message)
                             run_state.all_module_inputs['stop_component'] = {"message": deny_message}
                             if "stop_component" not in self._parent.module_dict:
                                 self._parent.add("stop_component", stop_component)
-                                # Set the callback manager on the newly added stop_component
                                 stop_component.set_callback_manager(self._parent.callback_manager)
                             return ["stop_component"]
+
             if stage == "stop_component":
-                # post stop component, just return empty list
                 return []
+
+        all_node_texts = []
+        nodes_extracted = False
+        for key, value in run_state.all_module_inputs.items():
+            if nodes_extracted:
+                break
+            nodes = value.get('nodes', [])
+            if nodes:
+                for node_with_score in nodes:
+                    node = getattr(node_with_score, 'node', None)
+                    if node:
+                        text = getattr(node, 'text', '')
+                        if text:
+                            all_node_texts.append(text)
+                nodes_extracted = True
+
+        context = "\n".join(all_node_texts)
+
+        deny, deny_message = self._enforcer(scope=['context'], prompt=context)
+        if deny:
+            stop_component = StopComponent(message=deny_message)
+            run_state.all_module_inputs['stop_component'] = {"message": deny_message}
+            if "stop_component" not in self._parent.module_dict:
+                self._parent.add("stop_component", stop_component)
+                stop_component.set_callback_manager(self._parent.callback_manager)
+            return ["stop_component"]
+
+        if 'stop_component' in run_state.executed_modules:
+            return []
+
+        if not next_stages:
+            output_key = next(iter(run_state.result_outputs))
+            answer = str(run_state.result_outputs[output_key].get('output', ""))
+            deny, deny_message = self._enforcer(scope=['bot_response'], prompt=answer)
+            if deny:
+                stop_component = StopComponent(message=deny_message)
+                run_state.all_module_inputs['stop_component'] = {"message": deny_message}
+                if "stop_component" not in self._parent.module_dict:
+                    self._parent.add("stop_component", stop_component)
+                    stop_component.set_callback_manager(self._parent.callback_manager)
+                return ["stop_component"]
+
+        if 'stop_component' in run_state.executed_modules:
+            return []
+
         return next_stages
