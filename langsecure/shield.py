@@ -78,8 +78,10 @@ class Langsecure(BaseModel):
 
         for result in results:
             if result.decision == 'deny':
-                print(f"Policy {result.policy_id} check failed, message = {result.message}")
-                return True, result.message 
+                # print(f"Policy {result.policy_id} check failed, message = {result.message}")
+                scope_key = scope[0]
+                message = f"Sorry, I cannot assist with this request due to {result.message} in the {scope_key} scope."
+                return True, message 
 
         return False, ""
 
