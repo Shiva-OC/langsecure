@@ -141,10 +141,11 @@ class LI_QueryPipeline(Langsecure):
                     break 
 
             context = "\n".join(all_node_texts)
+            self._context_processed = True
             deny, deny_message = self._enforcer(scope=['context'], prompt=context)
             if deny:
                 return self._add_stop_component(run_state, deny_message)
-            self._context_processed = True
+            
 
         if not next_stages:
             output_key = next(iter(run_state.result_outputs))
@@ -154,3 +155,4 @@ class LI_QueryPipeline(Langsecure):
                 return self._add_stop_component(run_state, deny_message)
 
         return next_stages
+
