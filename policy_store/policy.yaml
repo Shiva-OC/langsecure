@@ -49,7 +49,6 @@ policies:
         action: deny
         scope:
         - user_input
-        - context
         - bot_response
       - id: topics_control
         rules:
