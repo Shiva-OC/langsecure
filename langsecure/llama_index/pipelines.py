@@ -120,7 +120,7 @@ class LI_QueryPipeline(Langsecure):
             if stage == "input":
                 for module_key, module_input in run_state.all_module_inputs.items():
                     if module_key == stage:
-                        deny, deny_message = self._enforcer(scope=['user_input'], prompt=module_input['input'])
+                        deny, deny_message = self._enforcer(scope=['user_input'], prompt=module_input['question'])
                         if deny:
                             return self._add_stop_component(run_state, deny_message)
 
@@ -155,4 +155,3 @@ class LI_QueryPipeline(Langsecure):
                 return self._add_stop_component(run_state, deny_message)
 
         return next_stages
-
