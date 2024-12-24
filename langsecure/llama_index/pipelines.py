@@ -1,7 +1,6 @@
 """Arg pack components."""
 
-from typing import Any, Callable, Dict, Optional
-import concurrent.futures
+from typing import Any, Callable, Dict
 import asyncio
 import inspect
 
@@ -15,6 +14,7 @@ from llama_index.core.query_pipeline import QueryPipeline
 from langsecure.factory import implements
 from langsecure import Langsecure
 
+
 class StopComponent(QueryComponent):
     """Stop component.
 
@@ -22,7 +22,13 @@ class StopComponent(QueryComponent):
     """
 
     message: str = "Pipeline execution terminated."
+    scope: str = "general"
     callback_manager: Any = None
+
+    def __init__(self, message: str = "Pipeline execution terminated.", scope: str = "general"):
+        super().__init__()
+        self.message = f"Sorry, I cannot assist with this request due to {message} in the {scope} scope."
+        self.scope = scope
 
     def _validate_component_inputs(self, input: Dict[str, Any]) -> Dict[str, Any]:
         raise NotImplementedError
@@ -40,7 +46,7 @@ class StopComponent(QueryComponent):
 
     def _run_component(self, **kwargs: Any) -> Any:
         """Run component."""
-        msg = kwargs['message']
+        msg = self.message
 
         if self.callback_manager:
             streaming_handler = None
@@ -51,7 +57,7 @@ class StopComponent(QueryComponent):
 
             if streaming_handler and streaming_handler._target_streamer:
                 async def streamer(response):
-                    # Optionally send a metadata first if required, empty dict as in original code
+                    # Optionally send metadata first if required, empty dict as in original code
                     streaming_handler._target_streamer.websocket_streamer.queue.put_nowait({})
 
                     await streaming_handler.on_stream_start()
@@ -88,6 +94,7 @@ class StopComponent(QueryComponent):
 
 orig_get_next_module_keys = QueryPipeline.get_next_module_keys
 
+
 @implements('llama_index.core.query_pipeline.query.QueryPipeline')
 class LI_QueryPipeline(Langsecure):
     def shield(self, runnable: Any) -> Any:
@@ -102,9 +109,9 @@ class LI_QueryPipeline(Langsecure):
         self._context_processed = False
         return self._parent
 
-    def _add_stop_component(self, run_state, deny_message):
-        stop_component = StopComponent(message=deny_message)
-        run_state.all_module_inputs['stop_component'] = {"message": deny_message}
+    def _add_stop_component(self, run_state, deny_message, scope):
+        stop_component = StopComponent(message=deny_message, scope=scope)
+        run_state.all_module_inputs['stop_component'] = {"message": stop_component.message}
         if "stop_component" not in self._parent.module_dict:
             self._parent.add("stop_component", stop_component)
             stop_component.set_callback_manager(self._parent.callback_manager)
@@ -120,9 +127,16 @@ class LI_QueryPipeline(Langsecure):
             if stage == "input":
                 for module_key, module_input in run_state.all_module_inputs.items():
                     if module_key == stage:
-                        deny, deny_message = self._enforcer(scope=['user_input'], prompt=module_input['question'])
-                        if deny:
-                            return self._add_stop_component(run_state, deny_message)
+                    
+                        if module_input:
+                            prompt_key, prompt_value = next(iter(module_input.items()))
+                            deny, deny_message = self._enforcer(
+                                scope=['user_input'], prompt=prompt_value
+                            )
+                            if deny:
+                                return self._add_stop_component(
+                                    run_state, deny_message, scope="user_input"
+                                )
 
             if stage == "stop_component":
                 return []
@@ -138,13 +152,13 @@ class LI_QueryPipeline(Langsecure):
                             text = getattr(node, 'text', '')
                             if text:
                                 all_node_texts.append(text)
-                    break 
+                    break
 
             context = "\n".join(all_node_texts)
             self._context_processed = True
             deny, deny_message = self._enforcer(scope=['context'], prompt=context)
             if deny:
-                return self._add_stop_component(run_state, deny_message)
+                return self._add_stop_component(run_state, deny_message, scope="context")
             
 
         if not next_stages:
@@ -152,6 +166,6 @@ class LI_QueryPipeline(Langsecure):
             answer = str(run_state.result_outputs[output_key].get('output', ""))
             deny, deny_message = self._enforcer(scope=['bot_response'], prompt=answer)
             if deny:
-                return self._add_stop_component(run_state, deny_message)
+                return self._add_stop_component(run_state, deny_message, scope="bot_response")
 
         return next_stages
